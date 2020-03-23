@@ -1,10 +1,9 @@
+# -*- coding: cp1251 -*
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import (QPushButton, QVBoxLayout, QSplitter, QTextEdit, QApplication, QDialog)
 from PyQt5.QtGui import QTextCursor
 import sys
 import socket
-import time
-import MySQLdb
 from threading import Thread
 import select
 import time
@@ -22,6 +21,8 @@ class Settings_host:
   join = False
   data = 0
   name = ''
+  data_From_Server = ""
+
 
 
 class ClientThread(Thread):
@@ -34,19 +35,25 @@ class ClientThread(Thread):
         Settings_host.name = str(f.read())
         f.close()
 
-        db = MySQLdb.connect("localhost", "root", "protozerg", "datachat")
-        db.autocommit(True)
-        cursor = db.cursor()
-        cursor.execute("Select M.text, M.date, U.name from `Messages` M INNER JOIN `Users` U ON U.id = M.User_id;")
-        row = cursor.fetchall()
-        for rall in row:
-            window.chat.append("\n[" + rall[2] + "]  " + "[" + str(rall[1]) + "]  "  + rall[0])
+        Settings_host.sock.sendto(("P").encode("cp1251"),
+                                  Settings_host.server)
         while True:
             ready = select.select([Settings_host.sock], [], [], 1)
             if ready[0]:
                 data, adr = Settings_host.sock.recvfrom(1024)
-                times = time.strftime("%H.-%M.-%S", time.localtime())
-                window.chat.append("\n[" + times + "]" + data.decode("utf-8"))
+                if (data):
+                    data1 = data.decode("cp1251")
+                    time.sleep(0.05)
+                    if (data1[0] == "P"):
+                        Settings_host.data_From_Server = data1[1:]
+                        res = [element.strip(" ['[ ']'] \\n") for element in Settings_host.data_From_Server.split(", ")]
+                        d = list(res)
+                        for f in d:
+                            window.chat.append(f)
+                        window.chat.append("\n")
+                    elif (data1[0] != "P" and data1[0] != "A" and data1[0] != "R" and data1[0] != "M"):
+                        times = time.strftime("%H.-%M.-%S", time.localtime())
+                        window.chat.append("\n[" + times + "]" + data.decode("cp1251"))
                 if not data:
                     break
 
@@ -104,18 +111,14 @@ class Window(QDialog):
 
         if Settings_host.join == True:
             message = text
+            self.chatTextField.clear()
             if message!= "":
-                Settings_host.sock.sendto(("[" +Settings_host.name+ "] :: "+message+ " ").encode("utf-8"), Settings_host.server)
+                Settings_host.sock.sendto(("[" +Settings_host.name+ "] :: "+message+ " ").encode("cp1251"), Settings_host.server)
 
-                db = MySQLdb.connect("localhost", "root", "protozerg", "datachat")
-                db.autocommit(True)
-                cursor = db.cursor()
-                cursor.execute("Select `id`, `name` from `Users` Where `name` = %s", [Settings_host.name])
-                row = cursor.fetchone()
-                values = (message, int(row[0]))
-                cursor.execute("INSERT INTO Messages(text, User_id, date) VALUES (%s, %s, NOW());", values)
-                db.close()
-                time.sleep(0.3)
+                str1 = "M" + str(Settings_host.name) + "," + str(message)
+                Settings_host.sock.sendto(str1.encode("cp1251"),
+                                          Settings_host.server)
+                time.sleep(0.5)
 
 
 if __name__ == '__main__':
@@ -127,7 +130,7 @@ if __name__ == '__main__':
         f = open('data.txt', 'r')
         name = str(f.read())
         f.close()
-        Settings_host.sock.sendto(("[" + name + "] is connected to the chat").encode("utf-8"), Settings_host.server)
+        Settings_host.sock.sendto(("[" + name + "] is connected to the chat").encode("cp1251"), Settings_host.server)
         Settings_host.join = True
     window.exec()
     sys.exit(app.exec_())
